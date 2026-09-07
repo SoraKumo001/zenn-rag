@@ -58,7 +58,13 @@ Zenn プロジェクトのルートディレクトリに `.env` を配置しま�
 | `EMBEDDING_MODEL`    |  任意  | プロバイダ依存                        | 使用する埋め込みモデル名                                                |
 | `API_KEY`            | 条件付 | -                                     | APIキー（Gemini, OpenAI利用時に必須。LM Studio等は任意文字列で可）      |
 | `ZENN_USERNAME`      |  任意  | -                                     | 記事URL生成用ユーザー名 (`https://zenn.dev/[username]/articles/[slug]`) |
+| `ZENN_USERNAME`      |  任意  | -                                     | 記事・本のURL生成用ユーザー名（指定時は `https://zenn.dev/[username]/...`、未指定時は `https://zenn.dev/...` になります） |
 | `VECTOR_DB_DIR`      |  任意  | `.vectordb`                           | Vector DB (LanceDB) のデータ保存ディレクトリ                            |
+
+> ⚠️ **注意**: 生成される `.vectordb` ディレクトリはローカルのバイナリデータベースです。Git で管理しないよう、Zenn リポジトリの `.gitignore` に追加してください：
+> ```gitignore
+> .vectordb
+> ```
 
 > 💡 **Tip**: 従来の `OPENAI_BASE_URL` や `GEMINI_API_KEY`, `OLLAMA_EMBEDDING_MODEL` などのプロバイダ別環境変数もそのまま利用可能です（個別設定がある場合はそちらが優先されます）。
 
@@ -191,6 +197,21 @@ pnpm run rag:status
 ## MCP（AIエディタ連携）設定
 
 Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に以下を追加します：
+Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に本設定を追加します。
+
+<details>
+<summary><b>📁 各エディタの設定ファイル配置場所</b></summary>
+
+- **Claude Desktop**:
+  - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+  - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Cursor**:
+  - プロジェクトルートの `.cursor/mcp.json`
+  - または `Cursor Settings` > `Features` > `MCP` > `Add new MCP server`
+- **Antigravity**:
+  - 設定メニューの MCP 項目または `mcp_config.json`
+
+</details>
 
 ### macOS / Linux の場合
 
