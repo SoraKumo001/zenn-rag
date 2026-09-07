@@ -6,6 +6,7 @@ export type EmbeddingProvider = "gemini" | "openai" | "ollama";
 export interface RagContext {
   rootDir: string;
   articlesDir: string;
+  booksDir: string;
   vectorDbDir: string;
   manifestPath: string;
   provider: EmbeddingProvider;
@@ -57,6 +58,7 @@ export function initContext(targetDir?: string): RagContext {
   currentContext = {
     rootDir,
     articlesDir: path.resolve(rootDir, "articles"),
+    booksDir: path.resolve(rootDir, "books"),
     vectorDbDir,
     manifestPath: path.resolve(vectorDbDir, "manifest.json"),
     provider,
@@ -122,4 +124,13 @@ export function getArticleUrl(slug: string): string {
   const ctx = getContext();
   const username = ctx.zennUsername ? `${ctx.zennUsername}/` : "";
   return `https://zenn.dev/${username}articles/${slug}`;
+}
+
+export function getBookChapterUrl(
+  bookSlug: string,
+  chapterSlug: string,
+): string {
+  const ctx = getContext();
+  const username = ctx.zennUsername ? `${ctx.zennUsername}/` : "";
+  return `https://zenn.dev/${username}books/${bookSlug}/viewer/${chapterSlug}`;
 }

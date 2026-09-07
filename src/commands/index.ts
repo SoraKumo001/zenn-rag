@@ -1,6 +1,14 @@
 import { SyncService, type SyncOptions } from "../services/sync-service.js";
 
-export async function syncIndex(options: SyncOptions = {}): Promise<void> {
+export interface CliSyncOptions extends SyncOptions {
+  watch?: boolean;
+}
+
+export async function syncIndex(options: CliSyncOptions = {}): Promise<void> {
   const service = new SyncService(options.logger);
-  await service.sync(options);
+  if (options.watch) {
+    await service.watch(options);
+  } else {
+    await service.sync(options);
+  }
 }

@@ -32,6 +32,7 @@ program
   .command("index")
   .description("Zenn記事をベクトル化してVector DBに同期します（差分更新対応）")
   .option("-f, --force", "既存のインデックスを破棄して全件再同期する")
+  .option("-w, --watch", "ファイルを監視して変更時に自動で差分同期する")
   .option(
     "-d, --dir <path>",
     "Zennプロジェクトのルートディレクトリ（デフォルト: カレントディレクトリ）",
@@ -39,7 +40,7 @@ program
   .action((options) =>
     handleCliAction(async () => {
       initContext(options.dir);
-      await syncIndex({ force: options.force });
+      await syncIndex({ force: options.force, watch: options.watch });
     })(),
   );
 

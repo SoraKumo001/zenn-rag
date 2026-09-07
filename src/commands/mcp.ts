@@ -184,6 +184,104 @@ export async function runMcpServer(): Promise<void> {
     },
   );
 
+  // 4. 執筆支援: 関連記事・本の推薦リンク生成ツール
+  server.tool(
+    "suggest_related_links",
+    "執筆中の記事テキストや構想メモから、関連記事や本チャプターを推薦し、Markdownリンク形式で提示します。記事の内部リンクや引用の作成に便利です。",
+    {
+      text: z.string().describe("執筆中の文章、段落、または構想メモ"),
+      limit: z
+        .number()
+        .optional()
+        .default(3)
+        .describe("提案するリンクの最大件数（デフォルト: 3）"),
+    },
+    async ({ text, limit }) => {
+      try {
+        const queryVector = await getEmbedding(text);
+        const results = await store.search(queryVector, { limit });
+
+        if (results.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "関連する過去記事または本が見つかりませんでした。",
+              },
+            ],
+          };
+        }
+
+        const links = results
+          .map((r) => {
+            const score = (r.score * 100).toFixed(1);
+            const excerpt = r.text.slice(0, 120).replace(/\n+/g, " ");
+            return `- [${r.title} - ${r.heading}](${r.url}) (類似度: ${score}%)\n  > 関連箇所: ${excerpt}...`;
+          })
+          .join("\n\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `### 執筆支援: 推薦リンク一覧\n\n${links}`,
+            },
+          ],
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `リンク提案中にエラーが発生しました: ${msg}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // 5. インデックス同期実行ツール
+  server.tool(
+    "sync_index",
+    "Zenn記事および本のインデックスを差分同期（再ベクトル化）します。執筆直後の記事を即座にAIエディタの検索対象に反映させるために使用します。",
+    {
+      force: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("trueを指定すると全件強制再同期"),
+    },
+    async ({ force }) => {
+      try {
+        const { SyncService } = await import("../services/sync-service.js");
+        const syncService = new SyncService(new McpLogger());
+        const result = await syncService.sync({ force });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `インデックス同期が正常に完了しました。\n- 全体ファイル数: ${result.totalFiles}\n- 更新ファイル数: ${result.processedArticles}\n- 総チャンク数: ${result.totalChunks}`,
+            },
+          ],
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `インデックス同期中にエラーが発生しました: ${msg}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

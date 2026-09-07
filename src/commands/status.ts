@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { getActiveModel, getContext } from "../config.js";
 import { ArticleVectorStore } from "../store.js";
 import type { SyncManifest } from "../types.js";
@@ -19,12 +20,34 @@ export async function showStatus(): Promise<void> {
   console.log(`対象フォルダ: ${ctx.rootDir}`);
   console.log(`現在の設定:   ${active.provider} (${active.model})\n`);
 
-  let allFiles: string[] = [];
+  let articleFiles: string[] = [];
   try {
     const entries = await fs.readdir(ctx.articlesDir);
-    allFiles = entries.filter((f) => f.endsWith(".md"));
+    articleFiles = entries.filter((f) => f.endsWith(".md"));
   } catch {
-    console.error("記事ディレクトリが見つかりません:", ctx.articlesDir);
+    // articlesDir未作成
+  }
+
+  let bookFiles: string[] = [];
+  try {
+    const bookDirs = await fs.readdir(ctx.booksDir, { withFileTypes: true });
+    for (const d of bookDirs) {
+      if (d.isDirectory()) {
+        const chFiles = await fs.readdir(path.join(ctx.booksDir, d.name));
+        for (const ch of chFiles) {
+          if (ch.endsWith(".md")) {
+            bookFiles.push(`${d.name}/${ch}`);
+          }
+        }
+      }
+    }
+  } catch {
+    // booksDir未作成
+  }
+
+  const totalFiles = articleFiles.length + bookFiles.length;
+  if (totalFiles === 0) {
+    console.error("記事または本のディレクトリが見つかりません。");
     return;
   }
 
@@ -36,40 +59,37 @@ export async function showStatus(): Promise<void> {
     // まだ未作成
   }
 
-  const totalArticles = allFiles.length;
-  const indexedArticleSlugs = Object.keys(manifest.entries);
-  const indexedArticles = indexedArticleSlugs.length;
+  const indexedTargets = Object.keys(manifest.entries);
+  const indexedCount = indexedTargets.length;
 
   let indexedChunks = 0;
   for (const entry of Object.values(manifest.entries)) {
     indexedChunks += entry.chunkIds?.length || 0;
   }
 
-  const avgChunksPerArticle =
-    indexedArticles > 0 ? indexedChunks / indexedArticles : 5;
+  const avgChunksPerItem = indexedCount > 0 ? indexedChunks / indexedCount : 5;
   const estimatedTotalChunks =
-    indexedArticles === totalArticles
+    indexedCount === totalFiles
       ? indexedChunks
-      : Math.max(
-          indexedChunks,
-          Math.round(avgChunksPerArticle * totalArticles),
-        );
+      : Math.max(indexedChunks, Math.round(avgChunksPerItem * totalFiles));
 
-  console.log(`■ 記事の進捗:`);
-  console.log(`  ${renderProgressBar(indexedArticles, totalArticles)}`);
-  console.log(`  完了: ${indexedArticles} / ${totalArticles} 記事\n`);
+  console.log(`■ コンテンツの進捗:`);
+  console.log(`  ${renderProgressBar(indexedCount, totalFiles)}`);
+  console.log(
+    `  完了: ${indexedCount} / ${totalFiles} ファイル (記事: ${articleFiles.length}, 本チャプター: ${bookFiles.length})\n`,
+  );
 
   console.log(`■ チャンクの進捗:`);
   console.log(`  ${renderProgressBar(indexedChunks, estimatedTotalChunks)}`);
   console.log(
     `  完了: ${indexedChunks} / ${
-      indexedArticles === totalArticles
+      indexedCount === totalFiles
         ? `${indexedChunks}`
         : `約 ${estimatedTotalChunks}`
     } チャンク\n`,
   );
 
-  if (indexedArticles > 0) {
+  if (indexedCount > 0) {
     const recent = Object.entries(manifest.entries)
       .sort(
         (a, b) =>
@@ -106,11 +126,11 @@ export async function showStatus(): Promise<void> {
   }
 
   console.log(`\n${"=".repeat(45)}`);
-  if (indexedArticles < totalArticles) {
+  if (indexedCount < totalFiles) {
     console.log(
       "💡 インデックスが未完了です。`zenn-rag index` で同期できます。",
     );
   } else {
-    console.log("🎉 全記事のインデックス同期が完了しています！");
+    console.log("🎉 全コンテンツのインデックス同期が完了しています！");
   }
 }

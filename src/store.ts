@@ -15,6 +15,8 @@ export interface DBRecord {
   url: string;
   contentHash: string;
   vector: number[];
+  itemType: string;
+  bookSlug: string;
   [key: string]: unknown;
 }
 
@@ -32,6 +34,8 @@ function chunkToRecord(chunk: ArticleChunk): DBRecord {
     url: chunk.url,
     contentHash: chunk.contentHash,
     vector: chunk.vector,
+    itemType: chunk.itemType || "article",
+    bookSlug: chunk.bookSlug || "",
   };
 }
 
@@ -45,6 +49,9 @@ function rowToSearchResult(
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const itemType = (row.itemType as "article" | "book") || "article";
+  const bookSlug = (row.bookSlug as string) || undefined;
+
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -54,6 +61,8 @@ function rowToSearchResult(
     text: String(row.text),
     url: String(row.url),
     score,
+    itemType,
+    bookSlug: bookSlug || undefined,
   };
 }
 

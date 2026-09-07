@@ -1,10 +1,15 @@
 import fs from "node:fs/promises";
+import { watch as fsWatch } from "node:fs";
 import path from "node:path";
 import { getActiveModel, getContext } from "../config.js";
 import { getEmbedding, getEmbeddings } from "../embedder.js";
-import { computeHash, parseArticleFile } from "../parser.js";
+import {
+  computeHash,
+  parseArticleFile,
+  parseBookChapterFile,
+} from "../parser.js";
 import { ArticleVectorStore } from "../store.js";
-import type { SyncManifest } from "../types.js";
+import type { ArticleChunk, ItemType, SyncManifest } from "../types.js";
 import { getLogger, type Logger } from "../logger.js";
 
 export interface SyncOptions {
@@ -17,6 +22,13 @@ export interface SyncResult {
   processedArticles: number;
   totalChunks: number;
   isReset: boolean;
+}
+
+interface ContentTarget {
+  filePath: string;
+  slug: string; // 記事: slug, 本: bookSlug/chapterSlug
+  itemType: ItemType;
+  bookSlug?: string;
 }
 
 export class SyncService {
@@ -40,11 +52,74 @@ export class SyncService {
     manifest: SyncManifest,
   ): Promise<void> {
     await fs.mkdir(path.dirname(manifestPath), { recursive: true });
-    await fs.writeFile(
-      manifestPath,
-      JSON.stringify(manifest, null, 2),
-      "utf-8",
-    );
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
+  }
+
+  /**
+   * articles/ および books/ から対象 Markdown ファイルを走査
+   */
+  private async scanContentTargets(
+    articlesDir: string,
+    booksDir: string,
+  ): Promise<ContentTarget[]> {
+    const targets: ContentTarget[] = [];
+    let hasFoundAnyDir = false;
+
+    // 1. articles/
+    try {
+      const entries = await fs.readdir(articlesDir);
+      hasFoundAnyDir = true;
+      for (const entry of entries) {
+        if (entry.endsWith(".md")) {
+          const slug = path.basename(entry, ".md");
+          targets.push({
+            filePath: path.join(articlesDir, entry),
+            slug,
+            itemType: "article",
+          });
+        }
+      }
+    } catch {
+      // articles/ がない場合スキップ
+    }
+
+    // 2. books/
+    try {
+      const bookEntries = await fs.readdir(booksDir, { withFileTypes: true });
+      hasFoundAnyDir = true;
+      for (const bookEntry of bookEntries) {
+        if (bookEntry.isDirectory()) {
+          const bookSlug = bookEntry.name;
+          const bookDirPath = path.join(booksDir, bookSlug);
+          try {
+            const chapterFiles = await fs.readdir(bookDirPath);
+            for (const chFile of chapterFiles) {
+              if (chFile.endsWith(".md")) {
+                const chSlug = path.basename(chFile, ".md");
+                targets.push({
+                  filePath: path.join(bookDirPath, chFile),
+                  slug: `${bookSlug}/${chSlug}`,
+                  itemType: "book",
+                  bookSlug,
+                });
+              }
+            }
+          } catch {
+            // チャプター読み込みエラーはスキップ
+          }
+        }
+      }
+    } catch {
+      // books/ がない場合スキップ
+    }
+
+    if (!hasFoundAnyDir) {
+      throw new Error(
+        `記事または本ディレクトリが見つかりません (articles: ${articlesDir}, books: ${booksDir})`,
+      );
+    }
+
+    return targets;
   }
 
   async sync(options: SyncOptions = {}): Promise<SyncResult> {
@@ -52,10 +127,11 @@ export class SyncService {
     const ctx = getContext();
     const active = getActiveModel();
 
-    logger.info("=== Zenn 記事インデックス同期 ===");
+    logger.info("=== Zenn 記事 / 本 インデックス同期 ===");
     logger.info(`プロバイダ:       ${active.provider}`);
     logger.info(`Embeddingモデル:  ${active.model}`);
     logger.info(`記事ディレクトリ: ${ctx.articlesDir}`);
+    logger.info(`本ディレクトリ:   ${ctx.booksDir}`);
     logger.info(`Vector DB保存先:  ${ctx.vectorDbDir}\n`);
 
     let manifest = await this.loadManifest(ctx.manifestPath);
@@ -122,18 +198,17 @@ export class SyncService {
       manifest.model = active.model;
     }
 
-    let allFiles: string[] = [];
+    let targets: ContentTarget[] = [];
     try {
-      const entries = await fs.readdir(ctx.articlesDir);
-      allFiles = entries.filter((f) => f.endsWith(".md"));
+      targets = await this.scanContentTargets(ctx.articlesDir, ctx.booksDir);
     } catch (err) {
-      logger.error("記事ディレクトリが見つかりません:", ctx.articlesDir);
+      logger.error(err instanceof Error ? err.message : String(err));
       throw err;
     }
 
-    const currentSlugs = new Set(allFiles.map((f) => path.basename(f, ".md")));
+    const currentSlugs = new Set(targets.map((t) => t.slug));
 
-    // 削除された記事をDBから除去
+    // 削除されたコンテンツをDBから除去
     for (const manifestSlug of Object.keys(manifest.entries)) {
       if (!currentSlugs.has(manifestSlug)) {
         logger.info(`[削除検知] ${manifestSlug} をDBから削除しています...`);
@@ -142,43 +217,60 @@ export class SyncService {
       }
     }
 
-    // 変更または未処理の記事を抽出
-    const toProcess: string[] = [];
-    for (const file of allFiles) {
-      const filePath = path.join(ctx.articlesDir, file);
-      const slug = path.basename(file, ".md");
-      const content = await fs.readFile(filePath, "utf-8");
+    // 変更または未処理のファイルを抽出
+    const toProcess: ContentTarget[] = [];
+    for (const target of targets) {
+      const content = await fs.readFile(target.filePath, "utf-8");
       const currentHash = computeHash(content);
 
-      const prevEntry = manifest.entries[slug];
+      const prevEntry = manifest.entries[target.slug];
       if (!prevEntry || prevEntry.fileHash !== currentHash || options.force) {
-        toProcess.push(filePath);
+        toProcess.push(target);
       }
     }
 
     if (toProcess.length === 0) {
-      logger.info("全記事がすでに最新状態です。更新の必要はありません。");
+      logger.info("全コンテンツがすでに最新状態です。更新の必要はありません。");
       return {
-        totalFiles: allFiles.length,
+        totalFiles: targets.length,
         processedArticles: 0,
         totalChunks: 0,
         isReset,
       };
     }
 
-    logger.info(
-      `対象記事数: ${toProcess.length} 件 / 全 ${allFiles.length} 件`,
-    );
+    logger.info(`対象ファイル数: ${toProcess.length} 件 / 全 ${targets.length} 件`);
 
     const allNewChunks: {
       slug: string;
       fileHash: string;
-      chunks: Awaited<ReturnType<typeof parseArticleFile>>["chunks"];
+      itemType: ItemType;
+      bookSlug?: string;
+      chunks: ArticleChunk[];
     }[] = [];
 
-    for (const filePath of toProcess) {
-      const parsed = await parseArticleFile(filePath);
-      allNewChunks.push(parsed);
+    for (const target of toProcess) {
+      if (target.itemType === "book" && target.bookSlug) {
+        const parsed = await parseBookChapterFile(
+          target.filePath,
+          target.bookSlug,
+        );
+        allNewChunks.push({
+          slug: target.slug,
+          fileHash: parsed.fileHash,
+          itemType: "book",
+          bookSlug: target.bookSlug,
+          chunks: parsed.chunks,
+        });
+      } else {
+        const parsed = await parseArticleFile(target.filePath);
+        allNewChunks.push({
+          slug: target.slug,
+          fileHash: parsed.fileHash,
+          itemType: "article",
+          chunks: parsed.chunks,
+        });
+      }
     }
 
     const totalChunks = allNewChunks.reduce(
@@ -192,7 +284,10 @@ export class SyncService {
 
     let processedChunks = 0;
     for (const item of allNewChunks) {
-      logger.write(`- [${item.slug}] (${item.chunks.length} chunks)... `);
+      const typeLabel = item.itemType === "book" ? "[Book]" : "[Article]";
+      logger.write(
+        `- ${typeLabel} ${item.slug} (${item.chunks.length} chunks)... `,
+      );
 
       if (item.chunks.length === 0) {
         logger.info("本文なし（スキップ）");
@@ -213,6 +308,8 @@ export class SyncService {
         fileHash: item.fileHash,
         lastIndexed: new Date().toISOString(),
         chunkIds: item.chunks.map((c) => c.id),
+        itemType: item.itemType,
+        bookSlug: item.bookSlug,
       };
       await this.saveManifest(ctx.manifestPath, manifest);
 
@@ -223,10 +320,78 @@ export class SyncService {
     logger.info("\nインデックス同期が正常に完了しました！");
 
     return {
-      totalFiles: allFiles.length,
+      totalFiles: targets.length,
       processedArticles: toProcess.length,
       totalChunks,
       isReset,
     };
+  }
+
+  /**
+   * ファイル保存を監視して自動同期するウォッチモード
+   */
+  async watch(options: SyncOptions = {}): Promise<void> {
+    const logger = options.logger ?? this.logger;
+    const ctx = getContext();
+
+    // 初回同期を実行
+    logger.info("[ウォッチモード起動] 初回インデックス同期を実行します...");
+    try {
+      await this.sync(options);
+    } catch (err) {
+      logger.error("初回同期に失敗しました:", err);
+    }
+
+    logger.info("\n👀 ファイル変更を監視中... (終了するには Ctrl+C を押してください)");
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let isSyncing = false;
+
+    const triggerSync = (filename?: string | null) => {
+      if (filename && !filename.endsWith(".md")) {
+        return;
+      }
+
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+
+      debounceTimer = setTimeout(async () => {
+        if (isSyncing) return;
+        isSyncing = true;
+        try {
+          logger.info(`\n[変更検知: ${filename || "ファイル"}] 差分同期を開始...`);
+          await this.sync(options);
+          logger.info("👀 ファイル変更を監視中...");
+        } catch (err) {
+          logger.error("自動同期中にエラーが発生しました:", err);
+        } finally {
+          isSyncing = false;
+        }
+      }, 1500);
+    };
+
+    // articles/ の監視
+    try {
+      fsWatch(ctx.articlesDir, { recursive: true }, (_, filename) => {
+        triggerSync(filename);
+      });
+      logger.info(`- 監視中: ${ctx.articlesDir}`);
+    } catch {
+      // ディレクトリ未作成なら無視
+    }
+
+    // books/ の監視
+    try {
+      fsWatch(ctx.booksDir, { recursive: true }, (_, filename) => {
+        triggerSync(filename);
+      });
+      logger.info(`- 監視中: ${ctx.booksDir}`);
+    } catch {
+      // ディレクトリ未作成なら無視
+    }
+
+    // プロセスを維持
+    await new Promise(() => {});
   }
 }
