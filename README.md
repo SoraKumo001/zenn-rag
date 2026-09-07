@@ -157,9 +157,43 @@ npx zenn-rag mcp
 
 ---
 
+## おすすめ npm scripts 設定
+
+Zenn プロジェクトの `package.json` に以下を登録しておくと、日々の執筆や検索を短いコマンドで手軽に実行できます：
+
+```json
+{
+  "scripts": {
+    "rag:sync": "zenn-rag index",
+    "rag:watch": "zenn-rag index --watch",
+    "rag:status": "zenn-rag status",
+    "rag:search": "zenn-rag search",
+    "rag:mcp": "zenn-rag mcp"
+  }
+}
+```
+
+#### よく使う実行例
+
+```bash
+# 執筆中に裏で自動同期（保存時に即時差分更新されるため推奨）
+pnpm run rag:watch
+
+# 過去記事・本を検索（引数を渡して実行）
+pnpm run rag:search "Cloudflare Workers WASM"
+
+# 現在のインデックス進捗・トピック集計を確認
+pnpm run rag:status
+```
+
+---
+
 ## MCP（AIエディタ連携）設定
 
 Antigravity、Claude Desktop、Cursor などのMCP設定ファイルに以下を追加します：
+Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に以下を追加します：
+
+### macOS / Linux の場合
 
 ```json
 {
@@ -168,10 +202,35 @@ Antigravity、Claude Desktop、Cursor などのMCP設定ファイルに以下を
       "command": "npx",
       "args": ["-y", "zenn-rag", "mcp"],
       "cwd": "/path/to/your/zenn-repo"
+      "cwd": "/Users/username/path/to/zenn-repo"
     }
   }
 }
 ```
+
+### Windows の場合
+
+Windows では `cwd` のパス区切りに **スラッシュ `/`** または **二重エスケープ `\\`** を使用します：
+
+```json
+{
+  "mcpServers": {
+    "zenn-rag": {
+      "command": "npx",
+      "args": ["-y", "zenn-rag", "mcp"],
+      "cwd": "C:/prog/zenn-repo"
+    }
+  }
+}
+```
+
+> 💡 **Windows での注意点**:
+> - **パスの書き方**: JSON 内では `"C:/prog/zenn-repo"`（スラッシュ推奨）または `"C:\\prog\\zenn-repo"`（バックスラッシュ2重）で指定してください。単体の `\` は JSON パースエラーになります。
+> - **`npx` が見つからない場合**: 一部のエディタ（Claude Desktop 等）で `npx` 実行時に `ENOENT` エラーが出る場合は、以下のように `cmd.exe` 経由で実行してください：
+>   ```json
+>   "command": "cmd.exe",
+>   "args": ["/c", "npx", "-y", "zenn-rag", "mcp"]
+>   ```
 
 ### 提供ツール
 
