@@ -1,0 +1,43 @@
+{
+  "name": "zenn-rag",
+  "version": "0.1.0",
+  "description": "RAG and Vector Search toolkit for Zenn articles with MCP server support",
+  "type": "module",
+  "bin": {
+    "zenn-rag": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "zenn",
+    "rag",
+    "vectordb",
+    "lancedb",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "SoraKumo",
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "@lancedb/lancedb": "^0.38.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "commander": "^15.0.0",
+    "dotenv": "^17.4.2",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
