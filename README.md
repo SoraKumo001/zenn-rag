@@ -1,7 +1,13 @@
 # zenn-rag
 
-Zenn 記事リポジトリのための **Vector DB & RAG（検索・執筆支援）ツールキット**。
-Markdown記事を見出し単位でベクトル化し、CLI検索および **Model Context Protocol (MCP)** サーバー経由でエディタやAIアシスタント（Cursor、Claude、Antigravityなど）と連携できます。
+[![npm version](https://img.shields.io/npm/v/zenn-rag.svg)](https://www.npmjs.com/package/zenn-rag)
+[![npm downloads](https://img.shields.io/npm/dm/zenn-rag.svg)](https://www.npmjs.com/package/zenn-rag)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple)](https://modelcontextprotocol.io/)
+
+Zenn 記事・本リポジトリのための **Vector DB & RAG（検索・執筆支援）ツールキット**。
+Markdown記事・チャプターを見出し単位でベクトル化し、CLI検索および **Model Context Protocol (MCP)** サーバー経由でエディタやAIアシスタント（Cursor、Claude、Antigravityなど）と連携できます。
 
 ---
 
