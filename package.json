@@ -1,7 +1,7 @@
 {
   "name": "zenn-rag",
   "version": "0.1.0",
-  "description": "RAG and Vector Search toolkit for Zenn articles with MCP server support",
+  "description": "Vector DB & RAG toolkit for Zenn articles and books with MCP server support",
   "type": "module",
   "bin": {
     "zenn-rag": "./dist/cli.js"
@@ -16,7 +16,18 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run test && pnpm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SoraKumo001/zenn-rag.git"
+  },
+  "homepage": "https://github.com/SoraKumo001/zenn-rag#readme",
+  "bugs": {
+    "url": "https://github.com/SoraKumo001/zenn-rag/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "zenn",
@@ -24,7 +35,12 @@
     "vectordb",
     "lancedb",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "gemini",
+    "openai",
+    "ollama",
+    "semantic-search",
+    "embedding"
   ],
   "author": "SoraKumo",
   "license": "MIT",
