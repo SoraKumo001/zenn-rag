@@ -190,7 +190,6 @@ pnpm run rag:status
 
 ## MCP（AIエディタ連携）設定
 
-Antigravity、Claude Desktop、Cursor などのMCP設定ファイルに以下を追加します：
 Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に以下を追加します：
 
 ### macOS / Linux の場合
@@ -201,7 +200,6 @@ Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpSer
     "zenn-rag": {
       "command": "npx",
       "args": ["-y", "zenn-rag", "mcp"],
-      "cwd": "/path/to/your/zenn-repo"
       "cwd": "/Users/username/path/to/zenn-repo"
     }
   }
@@ -225,6 +223,7 @@ Windows では `cwd` のパス区切りに **スラッシュ `/`** または **�
 ```
 
 > 💡 **Windows での注意点**:
+>
 > - **パスの書き方**: JSON 内では `"C:/prog/zenn-repo"`（スラッシュ推奨）または `"C:\\prog\\zenn-repo"`（バックスラッシュ2重）で指定してください。単体の `\` は JSON パースエラーになります。
 > - **`npx` が見つからない場合**: 一部のエディタ（Claude Desktop 等）で `npx` 実行時に `ENOENT` エラーが出る場合は、以下のように `cmd.exe` 経由で実行してください：
 >   ```json
