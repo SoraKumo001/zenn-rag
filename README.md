@@ -51,17 +51,17 @@ Zenn プロジェクトのルートディレクトリに `.env` を配置しま�
 
 ### 共通環境変数一覧
 
-| 環境変数名           |  必須  | デフォルト値                          | 説明                                                                    |
-| :------------------- | :----: | :------------------------------------ | :---------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER` |  任意  | `gemini` または APIキー等から自動判別 | 使用するプロバイダ (`openai` \| `ollama` \| `gemini`)                   |
-| `BASE_URL`           |  任意  | プロバイダ依存                        | エンドポイントURL（LM Studio や Ollama 利用時に指定）                   |
-| `EMBEDDING_MODEL`    |  任意  | プロバイダ依存                        | 使用する埋め込みモデル名                                                |
-| `API_KEY`            | 条件付 | -                                     | APIキー（Gemini, OpenAI利用時に必須。LM Studio等は任意文字列で可）      |
-| `ZENN_USERNAME`      |  任意  | -                                     | 記事URL生成用ユーザー名 (`https://zenn.dev/[username]/articles/[slug]`) |
+| 環境変数名           |  必須  | デフォルト値                          | 説明                                                                                                                      |
+| :------------------- | :----: | :------------------------------------ | :------------------------------------------------------------------------------------------------------------------------ |
+| `EMBEDDING_PROVIDER` |  任意  | `gemini` または APIキー等から自動判別 | 使用するプロバイダ (`openai` \| `ollama` \| `gemini`)                                                                     |
+| `BASE_URL`           |  任意  | プロバイダ依存                        | エンドポイントURL（LM Studio や Ollama 利用時に指定）                                                                     |
+| `EMBEDDING_MODEL`    |  任意  | プロバイダ依存                        | 使用する埋め込みモデル名                                                                                                  |
+| `API_KEY`            | 条件付 | -                                     | APIキー（Gemini, OpenAI利用時に必須。LM Studio等は任意文字列で可）                                                        |
 | `ZENN_USERNAME`      |  任意  | -                                     | 記事・本のURL生成用ユーザー名（指定時は `https://zenn.dev/[username]/...`、未指定時は `https://zenn.dev/...` になります） |
-| `VECTOR_DB_DIR`      |  任意  | `.vectordb`                           | Vector DB (LanceDB) のデータ保存ディレクトリ                            |
+| `VECTOR_DB_DIR`      |  任意  | `.vectordb`                           | Vector DB (LanceDB) のデータ保存ディレクトリ                                                                              |
 
 > ⚠️ **注意**: 生成される `.vectordb` ディレクトリはローカルのバイナリデータベースです。Git で管理しないよう、Zenn リポジトリの `.gitignore` に追加してください：
+>
 > ```gitignore
 > .vectordb
 > ```
@@ -196,7 +196,6 @@ pnpm run rag:status
 
 ## MCP（AIエディタ連携）設定
 
-Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に以下を追加します：
 Antigravity、Claude Desktop、Cursor などの MCP 設定ファイル（`mcpServers`）に本設定を追加します。
 
 <details>
