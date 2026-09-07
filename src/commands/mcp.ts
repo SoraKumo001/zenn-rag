@@ -8,17 +8,23 @@ import { ArticleVectorStore } from "../store.js";
 export async function runMcpServer(): Promise<void> {
   setLogger(new McpLogger());
 
-  const server = new McpServer({
-    name: "zenn-rag",
-    version: "0.1.0",
-  });
+  const server = new McpServer(
+    {
+      name: "zenn-rag",
+      version: "0.1.0",
+    },
+    {
+      instructions:
+        "Zennの過去記事、過去の知見、技術スタック、実装パターン、記事の傾向や一覧に関するすべての質問や調査において、ファイルシステムの直接走査（grep/find）よりも最優先でこのMCPサーバーのツール（search_articles, list_articles, list_topics等）を使用してください。",
+    },
+  );
 
   const store = new ArticleVectorStore();
 
   // 1. 過去記事の類似セクション検索ツール
   server.tool(
     "search_articles",
-    "Zennの過去記事からクエリに関連するセクションをベクトル検索します。新しい記事の執筆時に、過去の知見やコード例、関連記事のURLを探すために使用します。",
+    "Zennの過去記事や本からクエリに関連するセクションを意味的（ベクトル）に検索します。過去記事の執筆内容、技術的な知見、コード例、URL、トラブルシューティング、過去の設計方針など、Zennコンテンツに関するあらゆる調査・質問対応で最優先で使用してください。",
     {
       query: z
         .string()
@@ -34,11 +40,21 @@ export async function runMcpServer(): Promise<void> {
         .string()
         .optional()
         .describe("トピック名による絞り込み（例: 'nextjs', 'cloudflare'）"),
+      keyword: z
+        .string()
+        .optional()
+        .describe(
+          "特定キーワードでの絞り込み（本文またはタイトルに含まれる文字列の部分一致）",
+        ),
     },
-    async ({ query, limit, topic }) => {
+    async ({ query, limit, topic, keyword }) => {
       try {
         const queryVector = await getEmbedding(query);
-        const results = await store.search(queryVector, { limit, topic });
+        const results = await store.search(queryVector, {
+          limit,
+          topic,
+          keyword,
+        });
 
         if (results.length === 0) {
           return {
@@ -142,7 +158,7 @@ export async function runMcpServer(): Promise<void> {
   // 3. 登録済みトピック一覧取得ツール
   server.tool(
     "list_topics",
-    "蓄積されている過去記事の全トピック（タグ）と各トピックの記事数を取得します。",
+    "蓄積されている過去記事の全トピック（タグ）と各トピックの記事数を取得します。リポジトリで扱われている技術領域や記事の全体傾向を把握したい時に使用します。",
     {},
     async () => {
       try {
@@ -184,7 +200,73 @@ export async function runMcpServer(): Promise<void> {
     },
   );
 
-  // 4. 執筆支援: 関連記事・本の推薦リンク生成ツール
+  // 4. 登録済み記事一覧取得ツール
+  server.tool(
+    "list_articles",
+    "登録されている過去記事や本の一覧（タイトル、スラッグ、URL、トピック）を取得します。特定のトピックに関連する記事の全貌や傾向を把握したい時や、記事一覧を調査したい時に使用します。",
+    {
+      topic: z
+        .string()
+        .optional()
+        .describe("トピック名による絞り込み（例: 'react', 'cloudflare'）"),
+      limit: z
+        .number()
+        .optional()
+        .default(100)
+        .describe("取得件数上限（デフォルト: 100）"),
+    },
+    async ({ topic, limit }) => {
+      try {
+        const articles = await store.listArticles({ topic, limit });
+        if (articles.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: topic
+                  ? `トピック '${topic}' に該当する記事は見つかりませんでした。`
+                  : "登録されている記事がありません。",
+              },
+            ],
+          };
+        }
+
+        const list = articles
+          .map((a, i) => {
+            const typeLabel = a.itemType === "book" ? "[Book] " : "";
+            const topicsStr = a.topics.join(", ") || "なし";
+            return `${i + 1}. **${typeLabel}${a.title}**\n   - Slug: \`${a.slug}\`\n   - URL: ${a.url}\n   - トピック: ${topicsStr}`;
+          })
+          .join("\n");
+
+        const header = topic
+          ? `# トピック '${topic}' の記事一覧 (${articles.length} 件)`
+          : `# 過去記事・本の一覧 (${articles.length} 件)`;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${header}\n\n${list}`,
+            },
+          ],
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `記事一覧の取得中にエラーが発生しました: ${msg}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // 5. 執筆支援: 関連記事・本の推薦リンク生成ツール
   server.tool(
     "suggest_related_links",
     "執筆中の記事テキストや構想メモから、関連記事や本チャプターを推薦し、Markdownリンク形式で提示します。記事の内部リンクや引用の作成に便利です。",
@@ -243,7 +325,7 @@ export async function runMcpServer(): Promise<void> {
     },
   );
 
-  // 5. インデックス同期実行ツール
+  // 6. インデックス同期実行ツール
   server.tool(
     "sync_index",
     "Zenn記事および本のインデックスを差分同期（再ベクトル化）します。執筆直後の記事を即座にAIエディタの検索対象に反映させるために使用します。",

@@ -51,3 +51,12 @@ export interface SearchResult {
   itemType?: ItemType;
   bookSlug?: string;
 }
+
+export interface ArticleSummary {
+  slug: string;
+  title: string;
+  topics: string[];
+  url: string;
+  itemType?: ItemType;
+  bookSlug?: string;
+}

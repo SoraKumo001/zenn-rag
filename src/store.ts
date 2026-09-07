@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { connect, type Connection, type Table } from "@lancedb/lancedb";
 import { getContext } from "./config.js";
-import type { ArticleChunk, SearchResult } from "./types.js";
+import type { ArticleChunk, ArticleSummary, SearchResult } from "./types.js";
 
 const TABLE_NAME = "article_chunks";
 
@@ -158,7 +158,7 @@ export class ArticleVectorStore {
 
   async search(
     queryVector: number[],
-    options: { limit?: number; topic?: string } = {},
+    options: { limit?: number; topic?: string; keyword?: string } = {},
   ): Promise<SearchResult[]> {
     const table = await this.getTable();
     if (!table) return [];
@@ -169,8 +169,19 @@ export class ArticleVectorStore {
       .distanceType("cosine")
       .limit(limit);
 
+    const conditions: string[] = [];
     if (options.topic) {
-      query = query.where(`topics LIKE '%${options.topic}%'`);
+      const escapedTopic = options.topic.replace(/'/g, "''");
+      conditions.push(`topics LIKE '%${escapedTopic}%'`);
+    }
+    if (options.keyword) {
+      const escapedKw = options.keyword.replace(/'/g, "''");
+      conditions.push(
+        `(text LIKE '%${escapedKw}%' OR title LIKE '%${escapedKw}%')`,
+      );
+    }
+    if (conditions.length > 0) {
+      query = query.where(conditions.join(" AND "));
     }
 
     const rawResults = await query.toArray();
@@ -180,6 +191,53 @@ export class ArticleVectorStore {
       const score = Math.max(0, 1 - distance);
       return rowToSearchResult(row as Record<string, unknown>, score);
     });
+  }
+
+  async listArticles(
+    options: { topic?: string; limit?: number } = {},
+  ): Promise<ArticleSummary[]> {
+    const table = await this.getTable();
+    if (!table) return [];
+
+    let query = table
+      .query()
+      .select(["slug", "title", "url", "topics", "itemType", "bookSlug"]);
+
+    if (options.topic) {
+      const escapedTopic = options.topic.replace(/'/g, "''");
+      query = query.where(`topics LIKE '%${escapedTopic}%'`);
+    }
+
+    const rows = await query.toArray();
+    const seen = new Set<string>();
+    const articles: ArticleSummary[] = [];
+
+    for (const row of rows) {
+      const slug = String(row.slug);
+      if (seen.has(slug)) continue;
+      seen.add(slug);
+
+      const topicsStr = (row.topics as string) || "";
+      const topics = topicsStr
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      articles.push({
+        slug,
+        title: String(row.title),
+        url: String(row.url),
+        topics,
+        itemType: (row.itemType as "article" | "book") || "article",
+        bookSlug: (row.bookSlug as string) || undefined,
+      });
+
+      if (options.limit && articles.length >= options.limit) {
+        break;
+      }
+    }
+
+    return articles;
   }
 
   async getAllTopics(): Promise<Record<string, number>> {
